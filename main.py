@@ -27,7 +27,7 @@ EXPECTED_BYTES = 77
 EXPECTED_SHA256 = "f615828526806afbb2a0e157a851cd9417347aae480330e5f01cc36d572a048c"
 
 
-def verify(text: str) -> bytes:
+def check_entry(text: str) -> bytes:
     """Check the entry text against the gate and the pinned hash."""
     if not (1 <= len(text) <= 140):
         raise SystemExit(f"entry is {len(text)} characters, must be 1-140")
@@ -44,13 +44,36 @@ def verify(text: str) -> bytes:
     return data
 
 
+def verify(path: str, data: bytes) -> bool:
+    """Read back the written file and confirm it is exactly the entry.
+
+    Returns True only when the bytes on disk match `data`, the byte count
+    matches EXPECTED_BYTES, and the SHA-256 matches EXPECTED_SHA256.
+    """
+    with open(path, "rb") as fh:
+        written = fh.read()
+    if written != data:
+        print("verification failed: written bytes differ from entry", file=sys.stderr)
+        return False
+    if len(written) != EXPECTED_BYTES:
+        print(f"verification failed: wrote {len(written)} bytes, expected {EXPECTED_BYTES}", file=sys.stderr)
+        return False
+    digest = hashlib.sha256(written).hexdigest()
+    if digest != EXPECTED_SHA256:
+        print(f"verification failed: written sha256 {digest} != expected {EXPECTED_SHA256}", file=sys.stderr)
+        return False
+    return True
+
+
 def main() -> int:
-    data = verify(ENTRY)
+    data = check_entry(ENTRY)
     out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "entry.txt")
     with open(path, "wb") as fh:
         fh.write(data)
+    if not verify(path, data):
+        raise SystemExit("verification failed: written file does not match")
     print(f"wrote {len(data)} bytes to {path} sha256={EXPECTED_SHA256}")
     return 0
 
